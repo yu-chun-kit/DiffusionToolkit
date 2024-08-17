@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Security.Policy;
 using System.Threading;
 using System.Windows;
@@ -38,65 +39,79 @@ namespace Diffusion.Toolkit.Controls
 
         private void CopyPath(object obj)
         {
-            if (Model.CurrentImage?.Path == null) return;
-            var p = Model.CurrentImage.Path;
-            Clipboard.SetDataObject(p, true);
-            Toast?.Invoke("Copied path to clipboard");
+            CopyToClipboard(Model.CurrentImage?.Path, "path", Toast);
         }
 
         private void CopyPrompt(object obj)
         {
-            if (Model.CurrentImage?.Prompt == null) return;
-            var p = Model.CurrentImage.Prompt;
-            Clipboard.SetDataObject(p, true);
-            Toast?.Invoke("Copied prompt to clipboard");
+            CopyToClipboard(Model.CurrentImage?.Prompt, "prompt", Toast);
         }
 
         private void CopyNegative(object obj)
         {
-            if (Model.CurrentImage?.NegativePrompt == null) return;
-            var p = Model.CurrentImage.NegativePrompt;
-            Clipboard.SetDataObject(p, true);
-            Toast?.Invoke("Copied negative prompt to clipboard");
+            CopyToClipboard(Model.CurrentImage?.NegativePrompt, "negative prompt", Toast);
         }
 
         private void CopySeed(object obj)
         {
-            if (Model.CurrentImage?.Seed == null) return;
-            var p = Model.CurrentImage.Seed.ToString();
-            Clipboard.SetDataObject(p, true);
-            Toast?.Invoke("Copied seed to clipboard");
+            CopyToClipboard(Model.CurrentImage?.Seed, "seed", Toast);
         }
 
         private void CopyHash(object obj)
         {
-            if (Model.CurrentImage?.ModelHash == null) return;
-            var p = Model.CurrentImage.ModelHash;
-            Clipboard.SetDataObject(p, true);
-            Toast?.Invoke("Copied hash to clipboard");
+            CopyToClipboard(Model.CurrentImage?.ModelHash, "hash", Toast);
         }
 
         private void CopyParameters(object obj)
         {
-            var p = Model.CurrentImage.Prompt;
-            var n = Model.CurrentImage.NegativePrompt;
-            var o = Model.CurrentImage.OtherParameters;
-            var parameters = $"{p}\r\n\r\nNegative prompt: {n}\r\n{o}";
+            if (Model.CurrentImage == null) return;
 
-            Clipboard.SetDataObject(parameters, true);
-            Toast?.Invoke("Copied all parameters to clipboard");
+            CopyParameters(
+                Model.CurrentImage.Prompt,
+                Model.CurrentImage.NegativePrompt,
+                Model.CurrentImage.OtherParameters,
+                Toast
+            );
         }
 
         private void CopyOthers(object obj)
         {
-            if (Model.CurrentImage?.OtherParameters == null) return;
-
-            var o = Model.CurrentImage.OtherParameters;
-
-            Clipboard.SetDataObject(o, true);
-
-            Toast?.Invoke("Copied other parameters to clipboard");
+            CopyToClipboard(Model.CurrentImage?.OtherParameters, "other parameters", Toast);
         }
 
+        public static void CopyToClipboard<T>(T value, string itemName, Action<string> toastAction)
+        {
+            if (value == null) return;
+
+            string stringValue = value is string s ? s : value.ToString();
+            CopyToClipboardInternal(stringValue, itemName, toastAction);
+        }
+
+        public static void CopyParameters(string prompt, string negativePrompt, string otherParameters, Action<string> toastAction)
+        {
+            var parameters = $"{prompt}\r\n\r\nNegative prompt: {negativePrompt}\r\n{otherParameters}";
+            CopyToClipboardInternal(parameters, "all parameters", toastAction);
+        }
+
+        private static void CopyToClipboardInternal(string value, string itemName, Action<string> toastAction)
+        {
+            try
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    Clipboard.SetDataObject(value, true);
+                });
+                toastAction?.Invoke($"Copied {itemName} to clipboard");
+            }
+            catch (COMException ex) when (ex.ErrorCode == unchecked((int)0x800401D0)) // CLIPBRD_E_CANT_OPEN
+            {
+                toastAction?.Invoke($"Failed to copy {itemName} to clipboard. The clipboard is in use.");
+            }
+            catch (Exception ex)
+            {
+                toastAction?.Invoke($"An error occurred while copying {itemName}: {ex.Message}");
+            }
+        }
     }
+
 }
